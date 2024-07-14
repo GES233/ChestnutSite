@@ -14,10 +14,10 @@ msgstr ""
 #: lib/chestnut_web/components/core_components.ex:482
 #, elixir-autogen, elixir-format
 msgid "Actions"
-msgstr ""
+msgstr "确认"
 
 #: lib/chestnut_web/components/core_components.ex:76
 #: lib/chestnut_web/components/core_components.ex:130
 #, elixir-autogen, elixir-format
 msgid "close"
-msgstr ""
+msgstr "关闭"
