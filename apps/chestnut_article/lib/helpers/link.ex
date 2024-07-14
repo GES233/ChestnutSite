@@ -78,44 +78,44 @@ defmodule Helpers.Link do
   """
 
   @type t :: %__MODULE__{
-    site: String.t(),
-    segment: String.t() | nil,
-    identifier: String.t(),
-    description: String.t()
-  }
+          site: String.t(),
+          segment: String.t() | nil,
+          identifier: String.t(),
+          description: String.t()
+        }
   defstruct [:site, :segment, :identifier, :description]
 
   # TODO: Add properties
   # - loc: china/oversea
   # - accessable: ok/disrupted/blocked
-  # - status: ok/in_problem
-  # - regex_pattern: ~r/.../
+  # - status: ok/bad
   @allowed_sites [
     ## This site
     # e.g.
     # [[:HH-Model-story|"从膜片钳到诺贝尔奖： Hodgkin-Huxley 模型的故事"]]
-    self: %{loc: :oversea, acc: :ok, status: :ok, r: ~r/^:+$/},
+    self: %{loc: :oversea, acc: :ok, status: :ok},
 
     ## Extra site
-    #:acfun,
-    #:bilibili,
-    #:deviantart,
-    #:douyin,
-    #:facebook,
-    #:github,
-    #:gitlab,
-    #:instagram,
-    #:kuaishou,
-    #:niconico,
-    #:pixiv,
-    #:tieba,
-    #:tiktok,
-    #:twitter,
-    #:x,
-    #:xiaohongshu,
-    #:youtube,
-    #:zhihu
+    acfun: %{loc: :china, acc: :ok, status: :ok},
+    bilibili: %{loc: :china, acc: :ok, status: :ok},
+    deviantart: %{loc: :oversea, acc: :blocked, status: :ok},
+    douyin: %{loc: :china, acc: :ok, status: :ok},
+    facebook: %{loc: :oversea, acc: :blocked, status: :ok},
+    github: %{loc: :oversea, acc: :disrupted, status: :ok},
+    gitlab: %{loc: :oversea, acc: :disrupted, status: :ok},
+    instagram: %{loc: :oversea, acc: :blocked, status: :ok},
+    kuaishou: %{loc: :china, acc: :ok, status: :ok},
+    niconico: %{loc: :oversea, acc: :blocked, status: :bad},
+    pixiv: %{loc: :oversea, acc: :blocked, status: :ok},
+    tieba: %{loc: :china, acc: :ok, status: :ok},
+    tiktok: %{loc: :oversea, acc: :blocked, status: :ok},
+    twitter: %{loc: :oversea, acc: :blocked, status: :ok},
+    x: %{loc: :oversea, acc: :blocked, status: :ok},
+    xiaohongshu: %{loc: :china, acc: :ok, status: :ok},
+    youtube: %{loc: :oversea, acc: :blocked, status: :ok},
+    zhihu: %{loc: :china, acc: :ok, status: :ok},
 
+    # May append in future.
     # :douban,
     # :qzone,
     # :discord,
@@ -123,19 +123,75 @@ defmodule Helpers.Link do
     # ...
   ]
 
-  @spec returnallsites() :: atom()
-  def returnallsites(), do:
-    @allowed_sites
-    |> Enum.map(fn {site, _} -> site end)
+  @spec returnallsites() :: list(atom())
+  def returnallsites(),
+    do:
+      @allowed_sites
+      |> Enum.map(fn {site, _} -> site end)
 end
 
 defmodule Helpers.Link.Parser do
   # Parse prev part of link.
 
+  # 1. content -> links
+
+  # 2. valid check
+
   # Pattern
 end
 
 defmodule Helpers.Link.Site do
-  @callback tolink(raw_content :: %Helpers.Link{}) ::
-              {:ok, link :: String.t()} | {:error, reason :: String.t()}
+  @moduledoc """
+  ...
+  """
+
+  @doc """
+  Enables the parsed string to be processed to the appropriate object.
+  """
+  @callback tomap(raw_content :: String.t()) ::
+              {:ok, %Helpers.Link{}} | {:error, reason :: atom()}
+
+  @doc """
+  ...
+  """
+  @callback tolink(link_body :: %Helpers.Link{}) ::
+              {:ok, link :: String.t()} | {:error, reason :: atom()}
+end
+
+defmodule Helpers.Link.Site.Bilibili do
+  @moduledoc """
+  Bilibili is a video website in China.
+  """
+
+  alias Helpers.Link
+  @behaviour Link.Site
+
+  @impl true
+  def tomap(_raw_content) do
+    {:ok, %Link{}}
+  end
+
+  @impl true
+  def tolink(_link_body = %Link{site: :bilibili}) do
+    {:ok, ""}
+  end
+  def tolink(_), do:
+    {:error, :site_not_match}
+end
+
+defmodule Helpers.Link.Site.Douyin do
+  alias Helpers.Link
+  @behaviour Link.Site
+
+  @impl true
+  def tomap(_raw_content) do
+    {:ok, %Link{}}
+  end
+
+  @impl true
+  def tolink(_link_body = %Link{site: :douyin}) do
+    {:ok, ""}
+  end
+  def tolink(_), do:
+    {:error, :site_not_match}
 end
