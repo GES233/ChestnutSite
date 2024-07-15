@@ -42,7 +42,11 @@ defmodule Helpers.Link do
 
   The whole syntax is:
 
-  `[[{sitename_site_with_id}:{extra_info}|{description}]]`
+  `[[{sitename_or_identifire}:{resource_id}|{description}]]`
+
+  where `resource_id` is the identifier of the resource
+  on the site if the part before comma is only a site,
+  and `description` is the description of the link.
 
   where `extra_info` is optional.
 
@@ -50,7 +54,7 @@ defmodule Helpers.Link do
 
   - Acfun[WIP]
     - `[[ac41|Nihilum公会全1-球FD伊利丹视频]]`
-  - Bilibili[WIP]
+  - Bilibili
     - AV-format `[[av170001|【MV】保加利亚妖王AZIS视频合辑]]`
     - BV-format `[[BV17x411w7KC|【MV】保加利亚妖王AZIS视频合辑]]`
   - Niconico[WIP]
@@ -78,12 +82,36 @@ defmodule Helpers.Link do
   """
 
   @type t :: %__MODULE__{
-          site: String.t(),
+          # like acfun or bili
+          site: String.t() | nil,
           segment: String.t() | nil,
           identifier: String.t(),
           description: String.t()
         }
   defstruct [:site, :segment, :identifier, :description]
+
+  @link_regex ~r/^\[\[(?<link>.*)\|(?<description>.*)\]\]$/
+
+  @doc """
+  Return true if the link is valid.
+  """
+  def valid?(link) when is_binary(link) do
+    link =~ @link_regex
+  end
+
+  def valid?(_), do: false
+
+  def getdescription(link) when is_binary(link) do
+    Regex.named_captures(@link_regex, link)["description"]
+  end
+
+  def getdescription(_), do: nil
+
+  def getlink(link) when is_binary(link) do
+    Regex.named_captures(@link_regex, link)["link"]
+  end
+
+  def getlink(_), do: nil
 
   # TODO: Add properties
   # - loc: china/oversea
@@ -113,7 +141,7 @@ defmodule Helpers.Link do
     x: %{loc: :oversea, acc: :blocked, status: :ok},
     xiaohongshu: %{loc: :china, acc: :ok, status: :ok},
     youtube: %{loc: :oversea, acc: :blocked, status: :ok},
-    zhihu: %{loc: :china, acc: :ok, status: :ok},
+    zhihu: %{loc: :china, acc: :ok, status: :ok}
 
     # May append in future.
     # :douban,
@@ -167,16 +195,64 @@ defmodule Helpers.Link.Site.Bilibili do
   @behaviour Link.Site
 
   @impl true
-  def tomap(_raw_content) do
-    {:ok, %Link{}}
+  def tomap(raw_content) do
+    case Link.valid?(raw_content) do
+      false ->
+        {:error, :invalid_link}
+
+      true ->
+        link = Link.getlink(raw_content)
+        description = Link.getdescription(raw_content)
+
+        case parse_bili_identifire(link) do
+          {:error, reason} -> {:error, reason}
+          {segment, identifier} ->
+            {:ok,
+             %Link{
+               site: :bilibili,
+               segment: segment,
+               identifier: identifier,
+               description: description
+             }}
+        end
+    end
+  end
+
+  # av number
+  @bili_avid_regex ~r/av(\d+)/
+  # bv number
+  @bili_bvid_regex ~r/bv(\w+)/
+  # ep number
+  # @bili_epid_regex ~r/ep(\d+)/
+  # ss number
+  # @bili_ssid_regex ~r/ss(\d+)/
+
+  @spec parse_bili_identifire(link :: String.t()) :: {atom(), String.t()} | {:error, reason :: atom()}
+  def parse_bili_identifire(link) do
+    cond do
+      Regex.match?(@bili_avid_regex, link) -> {:av, link}
+      Regex.match?(@bili_bvid_regex, link) -> {:bv, link}
+      # Regex.match?(@bili_epid_regex, link) -> {:ep, link}
+      # Regex.match?(@bili_ssid_regex, link) -> {:ss, link}
+      true -> {:error, :invalid_bilibili_link}
+    end
+  end
+
+  @spec bili_link?(link :: String.t()) :: boolean()
+  def bili_link?(link) do
+    parse_bili_identifire(link) != {:error, :invalid_bilibili_link}
   end
 
   @impl true
-  def tolink(_link_body = %Link{site: :bilibili}) do
-    {:ok, ""}
+  def tolink(_link_body = %Link{site: :bilibili, segment: segment, identifier: identifier, description: description}) do
+    case segment do
+      :av -> {:ok, "[#{description}](https://www.bilibili.com/video/#{identifier})"}
+      :bv -> {:ok, "[#{description}](https://www.bilibili.com/video/#{identifier})"}
+      _ -> {:error, :invalid_bilibili_link}
+    end
   end
-  def tolink(_), do:
-    {:error, :site_not_match}
+
+  def tolink(_), do: {:error, :site_not_match}
 end
 
 defmodule Helpers.Link.Site.Douyin do
@@ -192,6 +268,6 @@ defmodule Helpers.Link.Site.Douyin do
   def tolink(_link_body = %Link{site: :douyin}) do
     {:ok, ""}
   end
-  def tolink(_), do:
-    {:error, :site_not_match}
+
+  def tolink(_), do: {:error, :site_not_match}
 end
