@@ -5,11 +5,15 @@ defmodule Helpers.Link do
   Inspired by Wikipedia's link syntax, like
   `[[bla bla| horem]]`.
 
-  ### Grammer of link
+  ### Format of link
 
   The format of the link like this:
 
   `[[shortname_of_the_page | Lorem ipsum dolor sit amet]]`
+
+  or simply:
+
+  `[[page_link]]`
 
   where `|` is preceded by an identifier pointing to the
   corresponding link and followed by your description of
@@ -91,24 +95,29 @@ defmodule Helpers.Link do
   defstruct [:site, :segment, :identifier, :description]
 
   @link_regex ~r/^\[\[(?<link>.*)\|(?<description>.*)\]\]$/
+  # e.g. ...就是大名鼎鼎的 [[av10492]] （视频已经被删除）。
+  @link_regex2 ~r/^\[\[(?<link>.*)\]\]$/
 
   @doc """
   Return true if the link is valid.
   """
   def valid?(link) when is_binary(link) do
-    link =~ @link_regex
+    link =~ @link_regex || link =~ @link_regex2
   end
 
   def valid?(_), do: false
 
   def getdescription(link) when is_binary(link) do
+    # TODO: remove double quotes if has.
     Regex.named_captures(@link_regex, link)["description"]
+    || Regex.named_captures(@link_regex2, link)["link"]
   end
 
   def getdescription(_), do: nil
 
   def getlink(link) when is_binary(link) do
     Regex.named_captures(@link_regex, link)["link"]
+    || Regex.named_captures(@link_regex2, link)["link"]
   end
 
   def getlink(_), do: nil
@@ -119,8 +128,6 @@ defmodule Helpers.Link do
   # - status: ok/bad
   @allowed_sites [
     ## This site
-    # e.g.
-    # [[:HH-Model-story|"从膜片钳到诺贝尔奖： Hodgkin-Huxley 模型的故事"]]
     self: %{loc: :oversea, acc: :ok, status: :ok},
 
     ## Extra site
@@ -172,18 +179,71 @@ defmodule Helpers.Link.Site do
   @moduledoc """
   ...
   """
+  alias Helpers.Link
 
-  @doc """
-  Enables the parsed string to be processed to the appropriate object.
-  """
-  @callback tomap(raw_content :: String.t()) ::
-              {:ok, %Helpers.Link{}} | {:error, reason :: atom()}
+  @callback parse_site_identifire(link :: String.t()) ::
+              {segment :: String.t(), identifier :: String.t()} |
+              {:error, reason :: atom()}
+
+  @callback sitename() :: atom()
 
   @doc """
   ...
   """
   @callback tolink(link_body :: %Helpers.Link{}) ::
               {:ok, link :: String.t()} | {:error, reason :: atom()}
+
+  @doc """
+  Enables the parsed string to be processed to the appropriate object.
+  """
+  @spec tomap(raw_content :: String.t(), module :: module()) ::
+              {:ok, %Helpers.Link{}} | {:error, reason :: atom()}
+  def tomap(raw_content, module) do
+    case Link.valid?(raw_content) do
+      false ->
+        {:error, :invalid_link}
+
+      true ->
+        link = Link.getlink(raw_content)
+        description = Link.getdescription(raw_content)
+
+        res = apply(module, :parse_site_identifire, [link])
+        sitename = apply(module, :sitename, [])
+
+        case res do
+          {:error, reason} ->
+            {:error, reason}
+
+          {segment, identifier} ->
+            {:ok,
+             %Link{
+               site: sitename,
+               segment: segment,
+               identifier: identifier,
+               description: description
+             }}
+        end
+    end
+  end
+
+  @spec valid_site?(link :: String.t(), module :: module()) :: boolean()
+  def valid_site?(link, module) do
+    res = apply(module, :parse_site_identifire, [link])
+    case res do
+      {:error, _} -> false
+      _ -> true
+    end
+  end
+end
+
+defmodule Helpers.Link.Site.ChestnutSite do
+  @moduledoc """
+  To local site.
+
+  e.g.
+  [[:HH-Model-story|"从膜片钳到诺贝尔奖： Hodgkin-Huxley 模型的故事"]]
+  """
+  alias Helpers.Link
 end
 
 defmodule Helpers.Link.Site.Bilibili do
@@ -195,56 +255,37 @@ defmodule Helpers.Link.Site.Bilibili do
   @behaviour Link.Site
 
   @impl true
-  def tomap(raw_content) do
-    case Link.valid?(raw_content) do
-      false ->
-        {:error, :invalid_link}
-
-      true ->
-        link = Link.getlink(raw_content)
-        description = Link.getdescription(raw_content)
-
-        case parse_bili_identifire(link) do
-          {:error, reason} -> {:error, reason}
-          {segment, identifier} ->
-            {:ok,
-             %Link{
-               site: :bilibili,
-               segment: segment,
-               identifier: identifier,
-               description: description
-             }}
-        end
-    end
-  end
+  def sitename(), do: :bilibili
 
   # av number
   @bili_avid_regex ~r/av(\d+)/
   # bv number
-  @bili_bvid_regex ~r/bv(\w+)/
+  @bili_bvid_regex ~r/BV(\w+)/
   # ep number
   # @bili_epid_regex ~r/ep(\d+)/
   # ss number
   # @bili_ssid_regex ~r/ss(\d+)/
 
-  @spec parse_bili_identifire(link :: String.t()) :: {atom(), String.t()} | {:error, reason :: atom()}
-  def parse_bili_identifire(link) do
+  @impl true
+  def parse_site_identifire(link) do
     cond do
       Regex.match?(@bili_avid_regex, link) -> {:av, link}
       Regex.match?(@bili_bvid_regex, link) -> {:bv, link}
       # Regex.match?(@bili_epid_regex, link) -> {:ep, link}
       # Regex.match?(@bili_ssid_regex, link) -> {:ss, link}
-      true -> {:error, :invalid_bilibili_link}
+      true -> {:error, :invalid_link}
     end
   end
 
-  @spec bili_link?(link :: String.t()) :: boolean()
-  def bili_link?(link) do
-    parse_bili_identifire(link) != {:error, :invalid_bilibili_link}
-  end
-
   @impl true
-  def tolink(_link_body = %Link{site: :bilibili, segment: segment, identifier: identifier, description: description}) do
+  def tolink(
+        _link_body = %Link{
+          site: :bilibili,
+          segment: segment,
+          identifier: identifier,
+          description: description
+        }
+      ) do
     case segment do
       :av -> {:ok, "[#{description}](https://www.bilibili.com/video/#{identifier})"}
       :bv -> {:ok, "[#{description}](https://www.bilibili.com/video/#{identifier})"}
@@ -253,21 +294,34 @@ defmodule Helpers.Link.Site.Bilibili do
   end
 
   def tolink(_), do: {:error, :site_not_match}
+
+  def tomap(raw_content) do
+    Link.Site.tomap(raw_content, __MODULE__)
+  end
 end
 
 defmodule Helpers.Link.Site.Douyin do
-  alias Helpers.Link
-  @behaviour Link.Site
+end
 
-  @impl true
-  def tomap(_raw_content) do
-    {:ok, %Link{}}
+defmodule Helpers.Link.Site.YouTube do
+  @moduledoc """
+  YouTube is a video website.
+
+  ## Format of link
+
+  `[[youtube:{video_id}]]` or `[[watch?v={video_id}]]`
+  """
+
+  #alias Helpers.Link
+  #@behaviour Link.Site
+
+  #@impl true
+  def sitename(), do: :youtube
+
+  # @youtube_regex ~r/youtube:(.*)/
+
+  #@impl true
+  def parse_site_identifire(_link) do
+    # ...
   end
-
-  @impl true
-  def tolink(_link_body = %Link{site: :douyin}) do
-    {:ok, ""}
-  end
-
-  def tolink(_), do: {:error, :site_not_match}
 end
