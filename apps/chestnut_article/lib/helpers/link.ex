@@ -3,7 +3,7 @@ defmodule Helpers.Link do
   This helper provides a simpler syntax for representing
   links, optimised for links to commonly used websites.
   Inspired by Wikipedia's link syntax, like
-  `[[bla bla| horem]]`.
+  `[[bla bla| lorem]]`.
 
   ### Format of link
 
@@ -56,7 +56,7 @@ defmodule Helpers.Link do
 
   Websites we can currently parse include:
 
-  - Acfun[WIP]
+  - Acfun
     - `[[ac41|Nihilum公会全1-球FD伊利丹视频]]`
   - Bilibili
     - AV-format `[[av170001|【MV】保加利亚妖王AZIS视频合辑]]`
@@ -109,15 +109,15 @@ defmodule Helpers.Link do
 
   def getdescription(link) when is_binary(link) do
     # TODO: remove double quotes if has.
-    Regex.named_captures(@link_regex, link)["description"]
-    || Regex.named_captures(@link_regex2, link)["link"]
+    Regex.named_captures(@link_regex, link)["description"] ||
+      Regex.named_captures(@link_regex2, link)["link"]
   end
 
   def getdescription(_), do: nil
 
   def getlink(link) when is_binary(link) do
-    Regex.named_captures(@link_regex, link)["link"]
-    || Regex.named_captures(@link_regex2, link)["link"]
+    Regex.named_captures(@link_regex, link)["link"] ||
+      Regex.named_captures(@link_regex2, link)["link"]
   end
 
   def getlink(_), do: nil
@@ -128,27 +128,27 @@ defmodule Helpers.Link do
   # - status: ok/bad
   @allowed_sites [
     ## This site
-    self: %{loc: :oversea, acc: :ok, status: :ok},
+    self: %{loc: :oversea, acc: :ok, status: :ok, parser: Helpers.Link.Site.ChestnutSite},
 
     ## Extra site
-    acfun: %{loc: :china, acc: :ok, status: :ok},
-    bilibili: %{loc: :china, acc: :ok, status: :ok},
-    deviantart: %{loc: :oversea, acc: :blocked, status: :ok},
-    douyin: %{loc: :china, acc: :ok, status: :ok},
-    facebook: %{loc: :oversea, acc: :blocked, status: :ok},
-    github: %{loc: :oversea, acc: :disrupted, status: :ok},
-    gitlab: %{loc: :oversea, acc: :disrupted, status: :ok},
-    instagram: %{loc: :oversea, acc: :blocked, status: :ok},
-    kuaishou: %{loc: :china, acc: :ok, status: :ok},
-    niconico: %{loc: :oversea, acc: :blocked, status: :bad},
-    pixiv: %{loc: :oversea, acc: :blocked, status: :ok},
-    tieba: %{loc: :china, acc: :ok, status: :ok},
-    tiktok: %{loc: :oversea, acc: :blocked, status: :ok},
-    twitter: %{loc: :oversea, acc: :blocked, status: :ok},
-    x: %{loc: :oversea, acc: :blocked, status: :ok},
-    xiaohongshu: %{loc: :china, acc: :ok, status: :ok},
-    youtube: %{loc: :oversea, acc: :blocked, status: :ok},
-    zhihu: %{loc: :china, acc: :ok, status: :ok}
+    acfun: %{loc: :china, acc: :ok, status: :ok, parser: nil},
+    bilibili: %{loc: :china, acc: :ok, status: :ok, parser: Helpers.Link.Site.Bilibili},
+    deviantart: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    douyin: %{loc: :china, acc: :ok, status: :ok, parser: nil},
+    facebook: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    github: %{loc: :oversea, acc: :disrupted, status: :ok, parser: nil},
+    gitlab: %{loc: :oversea, acc: :disrupted, status: :ok, parser: nil},
+    instagram: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    kuaishou: %{loc: :china, acc: :ok, status: :ok, parser: nil},
+    niconico: %{loc: :oversea, acc: :blocked, status: :bad, parser: nil},
+    pixiv: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    tieba: %{loc: :china, acc: :ok, status: :ok, parser: nil},
+    tiktok: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    twitter: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    x: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    xiaohongshu: %{loc: :china, acc: :ok, status: :ok, parser: nil},
+    youtube: %{loc: :oversea, acc: :blocked, status: :ok, parser: nil},
+    zhihu: %{loc: :china, acc: :ok, status: :ok, parser: nil}
 
     # May append in future.
     # :douban,
@@ -182,8 +182,8 @@ defmodule Helpers.Link.Site do
   alias Helpers.Link
 
   @callback parse_site_identifire(link :: String.t()) ::
-              {segment :: String.t(), identifier :: String.t()} |
-              {:error, reason :: atom()}
+              {segment :: String.t(), identifier :: String.t()}
+              | {:error, reason :: atom()}
 
   @callback sitename() :: atom()
 
@@ -197,7 +197,7 @@ defmodule Helpers.Link.Site do
   Enables the parsed string to be processed to the appropriate object.
   """
   @spec tomap(raw_content :: String.t(), module :: module()) ::
-              {:ok, %Helpers.Link{}} | {:error, reason :: atom()}
+          {:ok, %Helpers.Link{}} | {:error, reason :: atom()}
   def tomap(raw_content, module) do
     case Link.valid?(raw_content) do
       false ->
@@ -229,6 +229,7 @@ defmodule Helpers.Link.Site do
   @spec valid_site?(link :: String.t(), module :: module()) :: boolean()
   def valid_site?(link, module) do
     res = apply(module, :parse_site_identifire, [link])
+
     case res do
       {:error, _} -> false
       _ -> true
@@ -244,6 +245,76 @@ defmodule Helpers.Link.Site.ChestnutSite do
   [[:HH-Model-story|"从膜片钳到诺贝尔奖： Hodgkin-Huxley 模型的故事"]]
   """
   alias Helpers.Link
+  @behaviour Link.Site
+
+  @impl true
+  def sitename(), do: :self
+
+  @chestsite_regex ~r/^:(.*)/
+
+  @impl true
+  def parse_site_identifire(link) do
+    cond do
+      Regex.match?(@chestsite_regex, link) -> {:article, link}
+      true -> {:error, :invalid_link}
+    end
+  end
+
+  @impl true
+  def tolink(%Link{site: :self, identifier: identifier, description: description}) do
+    # TODO: update identifire to route in phoenix.
+    {:ok, "[#{description}](#{identifier})"}
+  end
+
+  def tolink(_), do: {:error, :site_not_match}
+
+  def tomap(raw_content) do
+    Link.Site.tomap(raw_content, __MODULE__)
+  end
+end
+
+defmodule Helpers.Link.Site.Acfun do
+  @moduledoc """
+  Acfun is a ACGN website in China.
+  """
+
+  alias Helpers.Link
+  @behaviour Link.Site
+
+  @impl true
+  def sitename(), do: :acfun
+
+  # av number
+  @acfun_acid_regex ~r/ac(\d+)/
+
+  @impl true
+  def parse_site_identifire(link) do
+    cond do
+      Regex.match?(@acfun_acid_regex, link) -> {:ac, link}
+      true -> {:error, :invalid_link}
+    end
+  end
+
+  @impl true
+  def tolink(
+        _link_body = %Link{
+          site: :acfun,
+          segment: segment,
+          identifier: identifier,
+          description: description
+        }
+      ) do
+    case segment do
+      :ac -> {:ok, "[#{description}](https://www.acfun.cn/v/#{identifier})"}
+      _ -> {:error, :invalid_acfun_link}
+    end
+  end
+
+  def tolink(_), do: {:error, :site_not_match}
+
+  def tomap(raw_content) do
+    Link.Site.tomap(raw_content, __MODULE__)
+  end
 end
 
 defmodule Helpers.Link.Site.Bilibili do
@@ -312,15 +383,15 @@ defmodule Helpers.Link.Site.YouTube do
   `[[youtube:{video_id}]]` or `[[watch?v={video_id}]]`
   """
 
-  #alias Helpers.Link
-  #@behaviour Link.Site
+  # alias Helpers.Link
+  # @behaviour Link.Site
 
-  #@impl true
+  # @impl true
   def sitename(), do: :youtube
 
   # @youtube_regex ~r/youtube:(.*)/
 
-  #@impl true
+  # @impl true
   def parse_site_identifire(_link) do
     # ...
   end
